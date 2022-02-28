@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"><meta http-equiv="refresh" content="900">
+<head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
 	<style type="text/css">table, th, td {
     	border: 1px solid black;
 		}
@@ -12,16 +12,27 @@
 	<script src="./json.js"></script>
 	<script>
 		
-//Updated 28 feb 2022: added delta Arrow (rising/falling) to replace threshold column
+/*Updated 28 Feb 2022:
+1. added delta Arrow (rising/falling) to replace threshold column
+2. replaced Bridgnorth with Bewdley as it's working now
+3. Don't use reload to update (it removes last reading), so added a button
+4. The auto update is now done with thre setInterval code
+*/
 
-//NB in the station table below, id refers to the EA's "stationReference" number. You can find this by looking at return from https://environment.data.gov.uk/flood-monitoring/id/stations?search=Minsterworth (for example)
-var deltaArrow ="-";
+/*NB in the station table below, id refers to the EA's "stationReference" number. You can find this by looking at return from https://environment.data.gov.uk/flood-monitoring/id/stations?search=Minsterworth (for example) */
+
+//initial update after 5s to set delta
+setTimeout(buildTable, 10000);
+//update every 15 minutes
+setInterval(buildTable, 900000);
+
+var deltaArrow ="<center>-</center>";
 
 var stations = [
 	//Severn
 	{key:"Buildwas",	id:"2134", 	threshold:6.025, last:0},
-	{key:"Bridgnorth",	id:"2180", 	threshold:4.55, last:0},
-	//{key:"Bewdley",		id:"2001",	threshold:5.037}, Removed because input data was corrupt 3/9/2019
+	//{key:"Bridgnorth",	id:"2180", 	threshold:4.55, last:0},
+	{key:"Bewdley",		id:"2001",	threshold:5.037, last:0},
 	{key:"Worcester",	id:"2642", 	threshold:5.735, last:0},
 	{key:"Diglis",		id:"2085",  threshold:5.037, last:0},
 	{key:"Kempsey",		id:"2616", 	threshold:7.142, last:0},
@@ -81,7 +92,7 @@ function buildTable() {
 	htmlStr += "<th style=width:100px>Station</th>";
 	htmlStr += "<th style=width:130px>Date/time</th>";
 	htmlStr += "<th style=width:50px>Level (m)</th>";
-	htmlStr += "<th style=width:50px>Thrsh (m)</th>";
+	htmlStr += "<th style=width:50px>Delta</th>";
 	htmlStr += "<th style=width:50px>%Stby</th>";
 	htmlStr += "</tr>";
 	//River name
@@ -90,7 +101,7 @@ function buildTable() {
 	for (x = 0; x < window.stations.length; x++) {
 		url = url1 + window.stations[x].id + "-level-stage-i-15_min-mASD.json ";
 		//console.log(url);
-		//get server response -it is an OBJECT
+		//get server response
 		var theResp = getJSON(url);
 			//console.log(theResp);
 
@@ -106,7 +117,6 @@ function buildTable() {
 		
 		var theReading = items.latestReading.value;
 		var theThreshold = stations[x].threshold;
-		console.log("last = "+stations[x].last);
 		var percent = theReading/theThreshold*100;
 			percent = percent.toFixed(0);
 		//if(percent > 99) {action = 1} else {action=0};
@@ -140,23 +150,18 @@ function buildTable() {
 		htmlStr += "<td>" + theName + "</td>";
 		htmlStr += "<td>" + theDate + " " + theTime + "</td>";
 		htmlStr += "<td>" + theReading + "</td>";
-		
-		console.log ("x"+x + " now = "+theReading + " previous = "+stations[x].last)
+		//detect changes since last update
 		if (theReading > stations[x].last){
-		  deltaArrow = "U";
+		  deltaArrow = "<b><center><span>&#11165;</span></center></b>"; //up arrow
 		} else if (theReading < stations[x].last){
-		  deltaArrow = "D";
+		  deltaArrow = "<b><center><span>&#11167;</span></center></b>"; //down arrow
 		}
 		else {
-		  deltaArrow="-";
+		  deltaArrow="<center>-</center>";
 		}
 		//console.log ("x"+x + " now = "+theReading + " previous = "+stations[x].last)
-		//stations[x].last=theReading;  //this becomes the new last reading
 		
-		//test
-		stations[x].last+=x;
-		console.log ("x"+x +  " new last = "+stations[x].last)
-		//htmlStr += "<td>" + theThreshold + "</td>";
+		stations[x].last=theReading;  //this becomes the new last reading
 		htmlStr += "<td>" + deltaArrow + "</td>"; //show up or down arrow if changed
 		htmlStr += "<td>" + percent + "</td>";
 		htmlStr += "</tr>";
@@ -174,9 +179,9 @@ function buildTable() {
 <h2>GW4x4R river levels checker</h2>
 
 <p>The table below shows river levels at various stations on major rivers in our area.<br />
-The &#39;<g class="gr_ gr_32 gr-alert gr_spell gr_inline_cards gr_run_anim ContextualSpelling ins-del multiReplace" data-gr-id="32" id="32">Thrsh</g>&#39; column shows a standby threshold (based on the highest recent levels - typically from Feb 2014)<br />
-The &#39;%Stdby&#39; column shows %; the rows are colour-coded to show (red) when we should go to standby.<br />
-The page will automatically refresh every 15 minutes.</p>
+The &#39;%Stdby&#39; column shows % of a threshold (which is based on the highest recent levels - typically from Feb 2014).<br />Rows are colour-coded to show (red) when we should go to standby.<br />
+The readings will be automatically updated every 15 minutes. Click the update button for manual.</p>
+<button onclick="buildTable()">Update</button>
 
 <p><i>This uses Environment Agency flood and river level data from the real-time data API (Beta)</i></p>
 
