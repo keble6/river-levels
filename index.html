@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"><meta http-equiv="refresh" content="900">
+	<style type="text/css">table, th, td {
+    	border: 1px solid black;
+		}
+		th {
+    	text-align: center;
+		}
+	</style>
+	<script src="./jquery.min.js"></script>
+	<script src="./json.js"></script>
+	<script>
+		
+//Updated 28 feb 2022: added delta Arrow (rising/falling) to replace threshold column
+
+//NB in the station table below, id refers to the EA's "stationReference" number. You can find this by looking at return from https://environment.data.gov.uk/flood-monitoring/id/stations?search=Minsterworth (for example)
+var deltaArrow ="-";
+
+var stations = [
+	//Severn
+	{key:"Buildwas",	id:"2134", 	threshold:6.025, last:0},
+	{key:"Bridgnorth",	id:"2180", 	threshold:4.55, last:0},
+	//{key:"Bewdley",		id:"2001",	threshold:5.037}, Removed because input data was corrupt 3/9/2019
+	{key:"Worcester",	id:"2642", 	threshold:5.735, last:0},
+	{key:"Diglis",		id:"2085",  threshold:5.037, last:0},
+	{key:"Kempsey",		id:"2616", 	threshold:7.142, last:0},
+	{key:"Saxons Lode",	id:"2032", 	threshold:5.446, last:0},
+	{key:"Mythe Bridge",id:"2087", 	threshold:4.612, last:0},
+	{key:"Haw Bridge",	id:"2057", 	threshold:5.54, last:0},
+	{key:"Ashleworth",	id:"2071", 	threshold:5.321, last:0},
+	{key:"Gloucester",	id:"2165", 	threshold:4.454, last:0},
+	{key:"Minsterworth",id:"2102", 	threshold:6.28, last:0},
+	// Avon
+	{key:"Warwick",		id:"2091", 	threshold:3.318, last:0},
+	{key:"Stratford",	id:"2093", 	threshold:1.889, last:0},
+	{key:"Bidford",		id:"2615", 	threshold:3.801, last:0},
+	{key:"Evesham",		id:"2002",  threshold:3.963, last:0},
+	{key:"Pershore",	id:"2097",  threshold:4.931, last:0},
+	{key:"Bredon",		id:"2128",  threshold:3.677, last:0},
+	{key:"Tewkesbury",	id:"2098",  threshold:4.619, last:0},
+	//Wye - EA (English) stations. Welsh stations are treated separately (below)
+	{key:"Bredwardine", id:"055811_TG_9303", threshold:6.00, last:0},
+	{key:"Hereford Bridge",  id:"055807_TG_320", threshold:4.96, last:0},
+	{key:"Mordiford",   id:"055816_TG_319", threshold:5.01, last:0},
+	{key:"Ross on Wye",  id:"055817_TG_323", threshold:6.28, last:0},
+	//Teme
+	{key:"Ludlow", id:"2625", threshold:5.20, last:0},
+	{key:"Tenbury", id:"2008", threshold:5.90, last:0},
+	{key:"Stanford Br", id:"2646", threshold:6.00, last:0},
+	{key:"Bransford", id:"2086", threshold:6.00, last:0}
+	];
+
+	//Wye - Welsh stations
+	var stations2 = [
+	//{key:"Ross on Wye", id:2320, threshold:4.68},
+	{key:"Monmouth", id:4023, threshold:4.99, last:0},
+	];
+	
+
+	
+function getJSON(url) {
+	var resp ;
+	var xmlHttp ;
+	resp  = '' ;
+	xmlHttp = new XMLHttpRequest();
+	if(xmlHttp != null)	{
+		xmlHttp.open( "GET", url, false );
+		xmlHttp.send( null );
+		resp = xmlHttp.responseText;
+		}
+	return resp ;
+	}
+
+function buildTable() {
+	// Fetch level measure (only) from EA website
+	var url1="https://environment.data.gov.uk/flood-monitoring/id/measures/";
+	//Generate output table header
+	var htmlStr = '<table>';
+	htmlStr += "<tr>";
+	htmlStr += "<th style=width:100px>Station</th>";
+	htmlStr += "<th style=width:130px>Date/time</th>";
+	htmlStr += "<th style=width:50px>Level (m)</th>";
+	htmlStr += "<th style=width:50px>Thrsh (m)</th>";
+	htmlStr += "<th style=width:50px>%Stby</th>";
+	htmlStr += "</tr>";
+	//River name
+	htmlStr += "<tr><td colspan='5'><strong>River Severn</strong></td></tr>";
+
+	for (x = 0; x < window.stations.length; x++) {
+		url = url1 + window.stations[x].id + "-level-stage-i-15_min-mASD.json ";
+		//console.log(url);
+		//get server response -it is an OBJECT
+		var theResp = getJSON(url);
+			//console.log(theResp);
+
+		var theData = JSON.decode(theResp);
+		var items = theData['items'];
+		var theName = stations[x].key;
+		var theDatetime = items.latestReading.dateTime;
+		var split=theDatetime.split("T");
+		var theDate = split[0];	//Date is Big Endian
+		var temp=theDate.split("-");	//Convert to UK date format
+			theDate=temp[2]+"-"+temp[1]+"-"+temp[0];
+		var theTime=split[1].slice(0,5);
+		
+		var theReading = items.latestReading.value;
+		var theThreshold = stations[x].threshold;
+		console.log("last = "+stations[x].last);
+		var percent = theReading/theThreshold*100;
+			percent = percent.toFixed(0);
+		//if(percent > 99) {action = 1} else {action=0};
+		// use action = 0.5 to show amber
+		if(percent > 99) {action=1} else if(percent>90) {action=0.5} else {action=0};
+		if(x==11){
+			htmlStr += "<tr><td colspan='5'><strong>River Avon</strong></td></tr>";
+		}
+		if(x==18){
+			htmlStr += "<tr><td colspan='5'><strong>River Wye</strong></td></tr>";
+		}
+		if(x==22){
+			htmlStr += "<tr><td colspan='5'><strong>River Teme</strong></td></tr>";
+		}
+		//conditional colour for row, based on % of standby threshold
+		switch(action) {
+    		case 0:
+       			htmlStr += "<tr style='background-color: chartreuse; color: black;'>";
+       			break;
+    		case 0.5:
+       			htmlStr += "<tr style='background-color: orange; color: black;'>";
+       			break;
+    		case 1:
+       			htmlStr += "<tr style='background-color: red; color: white;'>";
+       			break;
+    		default:
+        		htmlStr += "<tr style='background-color: white; color: black;'>";
+		}
+
+		//htmlStr += "<tr>";
+		htmlStr += "<td>" + theName + "</td>";
+		htmlStr += "<td>" + theDate + " " + theTime + "</td>";
+		htmlStr += "<td>" + theReading + "</td>";
+		
+		console.log ("x"+x + " now = "+theReading + " previous = "+stations[x].last)
+		if (theReading > stations[x].last){
+		  deltaArrow = "U";
+		} else if (theReading < stations[x].last){
+		  deltaArrow = "D";
+		}
+		else {
+		  deltaArrow="-";
+		}
+		//console.log ("x"+x + " now = "+theReading + " previous = "+stations[x].last)
+		//stations[x].last=theReading;  //this becomes the new last reading
+		
+		//test
+		stations[x].last+=x;
+		console.log ("x"+x +  " new last = "+stations[x].last)
+		//htmlStr += "<td>" + theThreshold + "</td>";
+		htmlStr += "<td>" + deltaArrow + "</td>"; //show up or down arrow if changed
+		htmlStr += "<td>" + percent + "</td>";
+		htmlStr += "</tr>";
+		}
+	htmlStr += "</table>";
+	document.getElementById("textDiv").innerHTML = htmlStr;
+	}
+	
+
+</script>
+</head>
+<body data-gramm="true" data-gramm_editor="true" data-gramm_id="2471f905-a4ab-0579-bc20-91ac82f363e6" onload="buildTable();"></body>
+</html>
+<title>GW4x4R river levels</title>
+<h2>GW4x4R river levels checker</h2>
+
+<p>The table below shows river levels at various stations on major rivers in our area.<br />
+The &#39;<g class="gr_ gr_32 gr-alert gr_spell gr_inline_cards gr_run_anim ContextualSpelling ins-del multiReplace" data-gr-id="32" id="32">Thrsh</g>&#39; column shows a standby threshold (based on the highest recent levels - typically from Feb 2014)<br />
+The &#39;%Stdby&#39; column shows %; the rows are colour-coded to show (red) when we should go to standby.<br />
+The page will automatically refresh every 15 minutes.</p>
+
+<p><i>This uses Environment Agency flood and river level data from the real-time data API (Beta)</i></p>
+
+<div id="textDiv"></div>
+
+<div id="links">
+<hr />
+<h2><g class="gr_ gr_43 gr-alert gr_spell gr_inline_cards gr_run_anim ContextualSpelling multiReplace" data-gr-id="43" id="43">3 day</g> trend chart</h2>
+<a href="http://www.rwilson.org.uk/river_levels/trend_chart.html" target="_blank">Trend <g class="gr_ gr_33 gr-alert gr_spell gr_inline_cards gr_run_anim ContextualSpelling ins-del multiReplace" data-gr-id="33" id="33">chart</g></a>
+
+<hr />
+<h2><g class="gr_ gr_33 gr-alert gr_spell gr_inline_cards gr_disable_anim_appear ContextualSpelling ins-del multiReplace" data-gr-id="33" id="33">Links</g> to webcams</h2>
+
+<table>
+	<tbody>
+		<tr>
+			<th>River Severn</th>
+			<th>River Avon</th>
+			<th>River Wye</th>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/bewdley" target="_blank">Bewdley</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/stratford-upon-avon" target="_blank">Stratford upon Avon</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/hereford" target="_blank">Hereford</a></td>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/worcester" target="_blank">Worcester</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/bidford-on-avon" target="_blank">Bidford on Avon</a></td>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/diglis-lock" target="_blank">Diglis Lock</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/evesham-lock" target="_blank">Evesham Lock</a></td>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/upton-upon-severn" target="_blank">Upton upon Severn</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/strensham-lock" target="_blank">Strensham Lock</a></td>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/avon-lock-severn-level" target="_blank">Tewkesbury (Severn)</a></td>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/avon-lock" target="_blank">Tewkesbury (Avon)</a></td>
+		</tr>
+		<tr>
+			<td><a href="https://www.farsondigitalwatercams.com/locations/gloucester" target="_blank">Gloucester</a></td>
+			<td></td>
+		</tr>
+	</tbody>
+</table>
+
+<h2></h2>
+</div>
